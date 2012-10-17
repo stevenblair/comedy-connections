@@ -205,8 +205,8 @@ void setLayout() {
     if (layout == LAYOUT_RANDOM_STATIC) {
         physicsEnabled = false;
         for (int j = 0; j < vertexCount; j++) {
-            vertices[j].newX = random(50, width - 50);
-            vertices[j].newY = random(50, height - 50);
+            vertices[j].newX = random(BORDER, width - BORDER);
+            vertices[j].newY = random(BORDER, height - BORDER);
         }
     }
     else if (layout == LAYOUT_RANDOM_AUTO) {
@@ -242,7 +242,7 @@ void setLayout() {
 
             for (int j = 0; j < vertexCount; j++) {
                 x = BORDER + (gapPerYear * (((Show) vertices[j].item).startYear - minYear));
-                y = BORDER + (j * ((height - (BORDER * 2)) / vertexCount));
+                y = BORDER + random(BORDER, height - BORDER);
 
                 vertices[j].newX = x;
                 vertices[j].newY = y;
