@@ -1,4 +1,4 @@
-/* @pjs crisp=true; 
+/* @pjs crisp=false; 
  * pauseOnBlur=true; 
  */
 

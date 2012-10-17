@@ -117,7 +117,7 @@ var Data = {
         {id: 34, name: "Rowan Atkinson", dob: 1965},
         {id: 35, name: "Stephen Fry", dob: 1957},
         {id: 36, name: "Hugh Laurie", dob: 1959},
-        //{id: 37, name: "", dob: 1970},
+        {id: 37, name: "Chris Addison", dob: 1971},
         {id: 38, name: "Kevin Eldon", dob: 1960},
         {id: 39, name: "Jason Bateman", dob: 1969},
         {id: 40, name: "Rebecca Front", dob: 1964}
@@ -298,6 +298,9 @@ var Data = {
         {personId: 36, showId: 24},
         {personId: 36, showId: 53},
         {personId: 36, showId: 52},
+        {personId: 37, showId: 5},
+        {personId: 37, showId: 12},
+        {personId: 37, showId: 21},
         {personId: 38, showId: 3},
         {personId: 38, showId: 4},
         {personId: 38, showId: 38},
@@ -313,6 +316,9 @@ var Data = {
         {personId: 39, showId: 25},
         {personId: 39, showId: 36},
         {personId: 40, showId: 12},
-        {personId: 40, showId: 21}
+        {personId: 40, showId: 21},
+        {personId: 40, showId: 37},
+        {personId: 40, showId: 3},
+        {personId: 40, showId: 20}
     ]
 }
