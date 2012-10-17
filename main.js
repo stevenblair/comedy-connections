@@ -23,6 +23,7 @@
  */
 
 var UsedData = jQuery.extend(true, {}, Data);     // make a copy of the master data source
+UsedData.person = jlinq.from(Data.person).sort("dob").select();
 
 function findShowsWithPerson(personName) {
     var mapPersonToShow = jlinq.from(Data.personToShow)
@@ -132,7 +133,7 @@ function filter() {
     var filterText = $("#filterText").val();
     var include = $("#filterModeInclude").is(":checked");
     var viewMode = $("#viewModePeople").is(":checked");
-    UsedData.person = jlinq.from(Data.person);
+    UsedData.person = jlinq.from(Data.person).sort("dob");
     UsedData.show = jlinq.from(Data.show);
 
     if (filterText != '') {

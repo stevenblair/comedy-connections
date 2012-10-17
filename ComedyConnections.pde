@@ -37,7 +37,7 @@ final float NEARNESS_THRESHOLD = 20.0;
 
 /******************* Processing settings ****************/
 final color COLOR_EDGE_DEFAULT = color(64, 128, 187, 100/*64, 128, 128, 200*/);
-final color COLOR_EDGE_AXES = color(127, 127, 127, 255/*64, 128, 128, 200*/);
+final color COLOR_EDGE_AXES = color(127, 127, 127, 250/*64, 128, 128, 200*/);
 final color COLOR_VERTEX_DEFAULT = color(64, 128, 187, 190);
 final color COLOR_VERTEX_HIGHLIGHT = color(64, 187, 128, 190);    // too "bright"?
 final color COLOR_VERTEX_DIM = color(64, 128, 187, 40);
@@ -227,7 +227,7 @@ void setLayout() {
 
             for (int j = 0; j < vertexCount; j++) {
                 x = BORDER + (gapPerYear * (((Person) vertices[j].item).yearOfBirth - minYear));
-                y = BORDER + (j * ((height - (BORDER * 2)) / vertexCount));
+                y = BORDER + random(BORDER, height - BORDER);
 
                 vertices[j].newX = x;
                 vertices[j].newY = y;
@@ -260,7 +260,7 @@ void setLayout() {
 
         for (int j = 0; j < vertexCount; j++) {
             x = BORDER + (gapPerValue * (vertices[j].numberOfEdges - minValue));
-            y = BORDER + (j * ((height - (BORDER * 2)) / vertexCount));
+            y = BORDER + random(BORDER, height - BORDER);
 
             vertices[j].newX = x;
             vertices[j].newY = y;
