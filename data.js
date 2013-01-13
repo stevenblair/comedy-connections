@@ -127,7 +127,8 @@ var Data = {
         {id: 42, name: "Martin Freeman", dob: 1971},
         {id: 43, name: "Stephen Merchant", dob: 1974},
         {id: 44, name: "Matt Lucas", dob: 1974},
-        {id: 45, name: "David Walliams", dob: 1971}
+        {id: 45, name: "David Walliams", dob: 1971},
+        {id: 46, name: "Paterson Joseph", dob: 1964}
     ],
     personToShow: [
         {personId: 1, showId: 1},
@@ -180,6 +181,7 @@ var Data = {
         {personId: 6, showId: 27},
         {personId: 6, showId: 29},
         {personId: 6, showId: 22},
+        {personId: 6, showId: 49},
         {personId: 7, showId: 1},
         {personId: 7, showId: 27},
         {personId: 7, showId: 32},
@@ -356,6 +358,8 @@ var Data = {
         {personId: 45, showId: 26},
         {personId: 45, showId: 29},
         {personId: 45, showId: 27},
-        {personId: 45, showId: 32}
+        {personId: 45, showId: 32},
+        {personId: 46, showId: 7},
+        {personId: 46, showId: 8}
     ]
 }
