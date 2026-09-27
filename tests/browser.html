@@ -364,6 +364,50 @@ frame.addEventListener('load', async () => {
         await wakes(() => click('arrangementRandom'));
         await idle();
         passed('Empty results stop drawing and clearing the filter wakes them');
+
+        const toolbar = doc.getElementById('toolbar');
+        const content = doc.getElementById('content');
+        const graph = doc.getElementById('visualisation');
+        const controls = Array.from(toolbar.querySelectorAll('.ui-button, #filterText'));
+        const contains = (outer, inner) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 &&
+            inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+        for (const [width, height] of [[1600, 900], [1280, 720], [1024, 768], [820, 1180], [768, 1024],
+            [601, 800], [600, 800], [390, 844], [320, 640], [844, 390], [568, 320]]) {
+            frame.style.width = width + 'px';
+            frame.style.height = height + 'px';
+            await until(() => app.innerWidth === width && app.innerHeight === height &&
+                p.width === graph.clientWidth && p.height === graph.clientHeight, 'Graph did not resize with the controls');
+            const size = width + 'x' + height;
+            const bounds = toolbar.getBoundingClientRect();
+            check(doc.documentElement.scrollWidth <= width && content.scrollWidth <= content.clientWidth, size + ': horizontal overflow');
+            check(doc.documentElement.scrollHeight <= height, size + ': outer page overflow');
+            const boxes = controls.map(control => control.getBoundingClientRect());
+            controls.forEach((control, i) => {
+                check(contains(bounds, boxes[i]), size + ': control escaped the toolbar');
+                check(boxes[i].width > 0 && boxes[i].height >= (width <= 600 ? 44 : 30), size + ': control is too small');
+                if (control.classList.contains('ui-button')) {
+                    const text = doc.createRange();
+                    text.selectNodeContents(control.querySelector('.ui-button-text'));
+                    check(contains(boxes[i], text.getBoundingClientRect()), size + ': button text is clipped');
+                }
+                for (let j = i + 1; j < boxes.length; j++) {
+                    const overlapX = Math.min(boxes[i].right, boxes[j].right) - Math.max(boxes[i].left, boxes[j].left);
+                    const overlapY = Math.min(boxes[i].bottom, boxes[j].bottom) - Math.max(boxes[i].top, boxes[j].top);
+                    check(overlapX <= 1.1 || overlapY <= 1.1, size + ': controls overlap');
+                }
+            });
+            toolbar.querySelectorAll('.toolbar-group').forEach(group => {
+                const groupBox = group.getBoundingClientRect();
+                check(contains(groupBox, group.querySelector('.toolbar-title').getBoundingClientRect()), size + ': detached group title');
+                group.querySelectorAll('.ui-button, #filterText').forEach(control =>
+                    check(contains(groupBox, control.getBoundingClientRect()), size + ': control escaped its group'));
+            });
+            if (width >= 1280) check(bounds.height <= 44, size + ': desktop toolbar is no longer one row');
+            check(graph.clientHeight >= 250 && finiteGraph(), size + ': graph lost usable space or positions');
+        }
+        doc.getElementById('filterTitle').click();
+        check(doc.activeElement === doc.getElementById('filterText'), 'Filter label did not focus the input');
+        passed('Controls fit from 320px to 1600px, keep their labels, and resize the graph in portrait and landscape');
         check(errors.length === 0, errors.join('\n'));
         result.textContent = 'All browser checks passed.';
         document.body.dataset.status = 'passed';

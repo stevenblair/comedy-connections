@@ -59,14 +59,101 @@
             }
 
             #toolbar {
-                padding: 10px 4px;
-                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 12px 16px;
+            }
+            .toolbar-group, .filter-controls {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 0;
+                max-width: 100%;
             }
             .toolbar-title {
                 font-size: 1.2em;
                 font-weight: bold;
-                margin-left: 1.0em;
-                margin-right: 0.2em;
+                white-space: nowrap;
+            }
+            #toolbar .ui-buttonset {
+                display: flex;
+                min-width: 0;
+                margin: 0;
+            }
+            #toolbar .ui-button {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-sizing: border-box;
+                min-height: 30px;
+                margin: 0;
+                white-space: nowrap;
+            }
+            #toolbar .ui-button ~ .ui-button {
+                margin-left: -1px;
+            }
+            #filterText {
+                box-sizing: border-box;
+                width: 170px;
+                min-width: 0;
+                min-height: 30px;
+                padding: 4px 6px;
+                font-family: inherit;
+                font-size: 1.2em;
+            }
+            #filterMode {
+                flex-shrink: 0;
+            }
+            @media (max-width: 600px) {
+                #content {
+                    padding: 12px 12px 10px;
+                }
+                #toolbar {
+                    align-items: stretch;
+                    gap: 12px;
+                }
+                .toolbar-group {
+                    flex: 1 1 100%;
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 6px;
+                }
+                #toolbar .ui-button {
+                    flex: 1;
+                    min-height: 44px;
+                }
+                #toolbar .ui-button-text {
+                    padding: 6px 8px;
+                }
+                #toolbar #arrangement {
+                    display: grid;
+                    grid-template-columns: repeat(6, minmax(0, 1fr));
+                    gap: 4px;
+                }
+                #toolbar #arrangement .ui-button {
+                    grid-column: span 2;
+                    margin: 0;
+                    border-radius: 4px;
+                }
+                #toolbar #arrangement label[for="arrangementSize"],
+                #toolbar #arrangement label[for="arrangementYearAndSize"] {
+                    grid-column: span 3;
+                }
+                #filterText {
+                    flex: 1;
+                    width: 100%;
+                    min-height: 44px;
+                    font-size: 16px;
+                }
+            }
+            @media (pointer: coarse) {
+                #toolbar .ui-button, #filterText {
+                    min-height: 44px;
+                }
+                #filterText {
+                    font-size: 16px;
+                }
             }
         </style>
         <script src="vendor/jquery-1.8.2.min.js"></script>
@@ -82,28 +169,34 @@
     </head>
     <body>
         <div id="content">
-            <div>
-                <span id="toolbar">
-                    <span class="toolbar-title">mode: </span><span id="viewMode">
+            <div id="toolbar">
+                <div class="toolbar-group" role="group" aria-labelledby="viewModeTitle">
+                    <span class="toolbar-title" id="viewModeTitle">mode:</span>
+                    <div id="viewMode">
                         <input type="radio" id="viewModePeople" name="viewMode" checked="checked" /><label for="viewModePeople">people</label>
                         <input type="radio" id="viewModeShows" name="viewMode" /><label for="viewModeShows">shows and films</label>
-                    </span>
-                 
-                    <span class="toolbar-title">arrangement: </span><span id="arrangement">
+                    </div>
+                </div>
+                <div class="toolbar-group" role="group" aria-labelledby="arrangementTitle">
+                    <span class="toolbar-title" id="arrangementTitle">arrangement:</span>
+                    <div id="arrangement">
                         <input type="radio" id="arrangementRandom" name="arrangement" checked="checked" /><label for="arrangementRandom">random</label>
                         <input type="radio" id="arrangementPhysics" name="arrangement" /><label title="makes the 'blobs' repel each other, but the edges are 'springy'" for="arrangementPhysics">physics</label>
                         <input type="radio" id="arrangementYear" name="arrangement" /><label title="arrange by year of birth, or by starting year" for="arrangementYear">by year</label>
                         <input type="radio" id="arrangementSize" name="arrangement" /><label title="arrange by number of interconnections" for="arrangementSize">by size</label>
                         <input type="radio" id="arrangementYearAndSize" name="arrangement" /><label title="" for="arrangementYearAndSize">by year and size</label>
-                    </span>
-
-                    <span class="toolbar-title">filter: </span><input type="textfield" value="" id="filterText" class="text ui-widget-content ui-corner-all"/>
-                 
-                    <span id="filterMode">
-                        <input type="radio" id="filterModeInclude" name="filterMode" checked="checked" /><label for="filterModeInclude">include</label>
-                        <input type="radio" id="filterModeExclude" name="filterMode" /><label for="filterModeExclude">exclude</label>
-                    </span>
-                </span>
+                    </div>
+                </div>
+                <div class="toolbar-group" role="group" aria-labelledby="filterTitle">
+                    <label class="toolbar-title" id="filterTitle" for="filterText">filter:</label>
+                    <div class="filter-controls">
+                        <input type="text" value="" id="filterText" class="text ui-widget-content ui-corner-all"/>
+                        <div id="filterMode" role="group" aria-label="Filter mode">
+                            <input type="radio" id="filterModeInclude" name="filterMode" checked="checked" /><label for="filterModeInclude">include</label>
+                            <input type="radio" id="filterModeExclude" name="filterMode" /><label for="filterModeExclude">exclude</label>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div id="visualisation">
                 <canvas id="ComedyConnections" width="1200" height="600">

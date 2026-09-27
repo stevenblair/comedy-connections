@@ -11,4 +11,4 @@ Open `index.html` in a browser. All scripts are local; no installation or build 
 
 GitHub Pages publishes the repository root on `master`. `.nojekyll` serves the static files without Jekyll processing.
 
-To run the browser regression checks, serve this directory with `python -m http.server 8000`, then open `http://localhost:8000/tests/browser.html`. The checks cover idle redraws, hover, dragging, filters, layouts, resizing, and physics.
+To run the browser regression checks, serve this directory with `python -m http.server 8000`, then open `http://localhost:8000/tests/browser.html`. The checks cover idle redraws, hover, dragging, filters, layouts, responsive controls, resizing, and physics.
