@@ -1288,6 +1288,9 @@ function Vertex() {
 var $this_1 = this;
 function $superCstr(){$p.extendClassChain($this_1)}
 $this_1.item = null;
+$this_1.focused =  false;
+$this_1.hoverOpacity =  1.0;
+$this_1.hoverHighlight =  0.0;
 $this_1.edge = null;
 $this_1.numberOfEdges = 0;
 $this_1.p = null;
@@ -1332,6 +1335,9 @@ $this_1.numberOfEdges =  0;
 $this_1.anim =  1.0;
 $this_1.spring = null;
 $this_1.colorMix = 0x00000000;
+$this_1.focused =  false;
+$this_1.hoverOpacity =  1.0;
+$this_1.hoverHighlight =  0.0;
 function addEdge$3(item, a, b) {
 for (var i =  0;  i < $this_1.numberOfEdges;  i++) {
 if ($this_1.edges[i].item.id == item.id) {
@@ -1451,11 +1457,17 @@ var COLOR_EDGE_DEFAULT =  $p.color(64, 128, 187, 100 );
 var COLOR_EDGE_AXES =  $p.color(127, 127, 127, 250 );
 var COLOR_VERTEX_DEFAULT =  $p.color(64, 128, 187, 190);
 var COLOR_VERTEX_HIGHLIGHT =  $p.color(64, 187, 128, 190);     var COLOR_VERTEX_DIM =  $p.color(64, 128, 187, 40);
+var HOVER_DIM_OPACITY =  0.4;
+var HOVER_FADE_TIME =  100.0;
 var MAX_HUE =  235.0;         var font = null;
 var fontBold = null;
 
 var dragging =  false;
 var draggedVertex =  -1;
+var mouseInGraph =  false;
+var hoveredVertex =  -1;
+var hoveredEdge =  -1;
+var lastHoverFrame =  -1;
 var sortedPerson = 0;
 var selectedPerson =  -1;
 
@@ -1502,6 +1514,9 @@ resetData = resetData.bind($p);
 
 function createGraph() {
 mouseReleased();
+    hoveredVertex = -1;
+    hoveredEdge = -1;
+    lastHoverFrame = -1;
     vertices = null;
     edges = null;
     vertices = $p.createJavaArray('Vertex', [$p.max(MAX_PEOPLE, MAX_SHOWS)]);
@@ -1790,25 +1805,29 @@ $p.changeLayoutMode = changeLayoutMode;
 changeLayoutMode = changeLayoutMode.bind($p);
 
 function mouseMoved() {
-$p.loop();
+mouseInGraph = true;
+    $p.loop();
 }
 $p.mouseMoved = mouseMoved;
 mouseMoved = mouseMoved.bind($p);
 
 function mouseOver() {
-$p.loop();
+mouseInGraph = true;
+    $p.loop();
 }
 $p.mouseOver = mouseOver;
 mouseOver = mouseOver.bind($p);
 
 function mouseOut() {
-$p.loop();
+mouseInGraph = false;
+    $p.loop();
 }
 $p.mouseOut = mouseOut;
 mouseOut = mouseOut.bind($p);
 
 function mouseDragged() {
-$p.loop();
+mouseInGraph = true;
+    $p.loop();
     if (draggedVertex < 0) {
 return;
 }
@@ -1834,7 +1853,8 @@ $p.mouseReleased = mouseReleased;
 mouseReleased = mouseReleased.bind($p);
 
 function mousePressed() {
-$p.loop();
+mouseInGraph = true;
+    $p.loop();
     if ($p.mouseButton != $p.LEFT) {
 return;
 }
@@ -1850,7 +1870,7 @@ draggedVertex = i;
 $p.mousePressed = mousePressed;
 mousePressed = mousePressed.bind($p);
 
-function mouseIsOverLine(x1, y1, x2, y2) {
+function mouseIsOverLine(x1, y1, x2, y2, threshold) {
 var d =  $p.dist(x1, y1, x2, y2);
     var d1 =  $p.dist(x1, y1, $p.mouseX, $p.mouseY);
     var d2 =  $p.dist(x2, y2, $p.mouseX, $p.mouseY);
@@ -1859,7 +1879,7 @@ var d =  $p.dist(x1, y1, x2, y2);
 return false;
 }
 
-         if (d1 + d2 < d + MOUSE_OVER_LINE_DISTANCE_THRESHOLD) {
+         if (d1 + d2 < d + threshold) {
 return true;
 }
 
@@ -1867,6 +1887,102 @@ return true;
 }
 $p.mouseIsOverLine = mouseIsOverLine;
 mouseIsOverLine = mouseIsOverLine.bind($p);
+
+function updateHover() {
+var now =  $p.millis();
+    var nextVertex =  draggedVertex;
+    var nextEdge =  -1;
+
+    if (mouseInGraph && nextVertex < 0) {
+for (var i =  vertexCount - 1;  i >= 0;  i--) {
+var v =  vertices[i];
+            if (v.item.visible() && $p.dist(v.x, v.y, $p.mouseX, $p.mouseY) < $p.max(5, v.numberOfEdges * VERTEX_RADIUS_SCALE)) {
+nextVertex = i;
+                break;
+}
+}
+                 if (nextVertex < 0 && hoveredVertex >= 0) {
+var v =  vertices[hoveredVertex];
+            if (v.item.visible() && $p.dist(v.x, v.y, $p.mouseX, $p.mouseY) < $p.max(5, v.numberOfEdges * VERTEX_RADIUS_SCALE) + 4) {
+nextVertex = hoveredVertex;
+}
+}
+        if (nextVertex < 0 && hoveredEdge >= 0) {
+var e =  edges[hoveredEdge];
+            if (e.vertexA.item.visible() && e.vertexB.item.visible() && mouseIsOverLine(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y, MOUSE_OVER_LINE_DISTANCE_THRESHOLD * 2.5)) {
+nextEdge = hoveredEdge;
+}
+}
+        if (nextVertex < 0 && nextEdge < 0) {
+var closestDistance =  $p.width * $p.width + $p.height * $p.height;
+            for (var i =  0;  i < edgeCount;  i++) {
+var e =  edges[i];
+                if (e.vertexA.item.visible() && e.vertexB.item.visible() && mouseIsOverLine(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y, MOUSE_OVER_LINE_DISTANCE_THRESHOLD)) {
+var dx =  e.vertexB.x - e.vertexA.x;
+                    var dy =  e.vertexB.y - e.vertexA.y;
+                    var cross =  dx * ($p.mouseY - e.vertexA.y) - dy * ($p.mouseX - e.vertexA.x);
+                    var distanceSquared =  cross * cross / (dx * dx + dy * dy);
+                    if (distanceSquared < closestDistance) {
+closestDistance = distanceSquared;
+                        nextEdge = i;
+}
+}
+}
+}
+}
+
+    hoveredVertex = nextVertex;
+    hoveredEdge = nextEdge;
+
+    for (var i =  0;  i < vertexCount;  i++) vertices[i].focused = false;
+    if (hoveredVertex >= 0) vertices[hoveredVertex].focused = true;
+    for (var i =  0;  i < edgeCount;  i++) {
+var e =  edges[i];
+        e.focused = hoveredVertex >= 0 ? e.vertexA == vertices[hoveredVertex] || e.vertexB == vertices[hoveredVertex] : i == hoveredEdge;
+        if (e.focused) {
+e.vertexA.focused = true;
+            e.vertexB.focused = true;
+}
+}
+
+              var elapsed =  lastHoverFrame < 0 ? 16 : $p.min(now - lastHoverFrame, 50);
+    var step =  elapsed / HOVER_FADE_TIME;
+    lastHoverFrame = now;
+    var active =  hoveredVertex >= 0 || hoveredEdge >= 0;
+    var animating =  false;
+    for (var i =  0;  i < vertexCount;  i++) {
+var v =  vertices[i];
+        var opacity =  active && !v.focused ? HOVER_DIM_OPACITY : 1.0;
+        var highlight =  i == hoveredVertex ? 1.0 : 0.0;
+        v.hoverOpacity = fadeHover(v.hoverOpacity, opacity, step * (1.0 - HOVER_DIM_OPACITY));
+        v.hoverHighlight = fadeHover(v.hoverHighlight, highlight, step);
+        if (v.hoverOpacity != opacity || v.hoverHighlight != highlight) animating = true;
+}
+    for (var i =  0;  i < edgeCount;  i++) {
+var e =  edges[i];
+        var opacity =  active && !e.focused ? HOVER_DIM_OPACITY : 1.0;
+        var highlight =  i == hoveredEdge ? 1.0 : 0.0;
+        e.hoverOpacity = fadeHover(e.hoverOpacity, opacity, step * (1.0 - HOVER_DIM_OPACITY));
+        e.hoverHighlight = fadeHover(e.hoverHighlight, highlight, step);
+        e.anim = 1.0 + 20.0 * e.hoverHighlight;
+        if (e.hoverOpacity != opacity || e.hoverHighlight != highlight) animating = true;
+}
+    return animating;
+}
+$p.updateHover = updateHover;
+updateHover = updateHover.bind($p);
+
+function fadeHover(value, target, step) {
+return $p.abs(target - value) <= step ? target : value + (target > value ? step : -step);
+}
+$p.fadeHover = fadeHover;
+fadeHover = fadeHover.bind($p);
+
+function hoverColor(c, opacity) {
+return opacity < 1.0 ? $p.color(c, $p.alpha(c) * opacity) : c;
+}
+$p.hoverColor = hoverColor;
+hoverColor = hoverColor.bind($p);
 
  function getConnections(j, k) {
 var conn =  $p.createJavaArray('int', [MAX_PEOPLE]);
@@ -1967,6 +2083,10 @@ vertices[i].y += ((vertices[i].newY - vertices[i].y) / $p.__frameRate);
 }
 }
 
+    if (updateHover()) animating = true;
+    var hoverActive =  hoveredVertex >= 0 || hoveredEdge >= 0;
+    var passes =  hoverActive ? 2 : 1;
+
     $p.colorMode($p.HSB);
     $p.background(0);             $p.textAlign($p.RIGHT);
 
@@ -2002,36 +2122,18 @@ $p.line(25, 25, 225, 25);
     $p.strokeWeight(1);
     $p.colorMode($p.HSB);
 
-    for (var k =  0;  k < edgeCount;  k++) {
-if (edges[k].vertexA.item.visible() && edges[k].vertexB.item.visible()) {
-if (mouseIsOverLine(edges[k].vertexA.x, edges[k].vertexA.y, edges[k].vertexB.x, edges[k].vertexB.y)) {
-if (edges[k].anim < 21.0) {
-edges[k].anim = edges[k].anim + 5.0;
-                    animating = true;
+         for (var pass =  0;  pass < passes;  pass++) {
+for (var k =  0;  k < edgeCount;  k++) {
+var dimmed =  hoverActive && !edges[k].focused;
+            if (hoverActive && dimmed != (pass == 0)) continue;
+            if (edges[k].vertexA.item.visible() && edges[k].vertexB.item.visible()) {
+var e =  edges[k];
+                                 if (e.hoverHighlight < 1.0) {
+$p.stroke(hoverColor(mode == MODE_SHOWS_VERTICES ? e.colorMix : COLOR_EDGE_DEFAULT, e.hoverOpacity * (1.0 - e.hoverHighlight)));
+                    $p.strokeWeight( (e.numberOfEdges * e.numberOfEdges * EDGE_THICKNESS_SCALE));                      $p.line(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y);
 }
-                else {
-edges[k].anim = 21.0;
-}
-
-                drawEdge(edges[k], edges[k].vertexA, edges[k].vertexB, edges[k].anim, true);
-}
-            else {
-if (edges[k].anim > 1.0) {
-edges[k].anim = edges[k].anim - 5.0;
-                    animating = true;
-}
-                else {
-edges[k].anim = 1.0;
-}
-
-                if (edges[k].anim == 1.0) {
-if (mode == MODE_SHOWS_VERTICES) {
-$p.stroke(edges[k].colorMix);
-}
-                    $p.strokeWeight( (edges[k].numberOfEdges * edges[k].numberOfEdges * EDGE_THICKNESS_SCALE));                      $p.line(edges[k].vertexA.x, edges[k].vertexA.y, edges[k].vertexB.x, edges[k].vertexB.y);
-}
-                else {
-drawEdge(edges[k], edges[k].vertexA, edges[k].vertexB, edges[k].anim, false);
+                if (e.hoverHighlight > 0.0) {
+drawEdge(e, e.vertexA, e.vertexB, e.anim, e.hoverOpacity * e.hoverHighlight);
 }
 }
 }
@@ -2041,44 +2143,36 @@ drawEdge(edges[k], edges[k].vertexA, edges[k].vertexB, edges[k].anim, false);
     $p.textAlign($p.LEFT);
     $p.textFont(font);
 
-    for (j = 0;  j < vertexCount;  j++) {
-$p.noStroke();
+    for (var pass =  0;  pass < passes;  pass++) {
+for (var j =  0;  j < vertexCount;  j++) {
+var dimmed =  hoverActive && !vertices[j].focused;
+            if (hoverActive && dimmed != (pass == 0)) continue;
+                         $p.noStroke();
 
-                 var radi =  $p.max(5, vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE);
-        var diam =  radi * 2.0;
+                         var radi =  $p.max(5, vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE);
+            var diam =  radi * 2.0;
 
-        if (j == draggedVertex || $p.dist(vertices[j].x, vertices[j].y, $p.mouseX, $p.mouseY) < radi) {
-$p.fill(COLOR_VERTEX_HIGHLIGHT);
-}
-        else {
-$p.colorMode($p.RGB);
-                         if ($p.__instanceof(vertices[j].item , Person)) {
-$p.fill(( vertices[j].item).c);
-}
-            else {
-$p.fill(COLOR_VERTEX_DEFAULT);
-}
-}
+            var col =  $p.__instanceof(vertices[j].item , Person )? ( vertices[j].item).c : COLOR_VERTEX_DEFAULT;
+            if (vertices[j].hoverHighlight > 0.0) col = $p.lerpColor(col, COLOR_VERTEX_HIGHLIGHT, vertices[j].hoverHighlight);
+            $p.fill(hoverColor(col, vertices[j].hoverOpacity));
 
-        if (selectedPerson == -1 || (selectedPerson > -1 && arrayFind(getConnections(j, j), selectedPerson))) {
-$p.ellipse(vertices[j].x, vertices[j].y, diam, diam);
-            $p.text(vertices[j].item.name, vertices[j].x + 2, vertices[j].y - 5 - radi);
+            if (selectedPerson != -1 && !arrayFind(getConnections(j, j), selectedPerson)) {
+$p.fill(hoverColor(COLOR_VERTEX_DIM, vertices[j].hoverOpacity));
 }
-        else {
-$p.fill(COLOR_VERTEX_DIM);
             $p.ellipse(vertices[j].x, vertices[j].y, diam, diam);
             $p.text(vertices[j].item.name, vertices[j].x + 2, vertices[j].y - 5 - radi);
 }
 }
 
          if (!animating) {
-$p.noLoop();
+lastHoverFrame = -1;
+        $p.noLoop();
 }
 }
 $p.draw = draw;
 draw = draw.bind($p);
 
-function drawEdge(e, v1, v2, distance, drawNames) {
+function drawEdge(e, v1, v2, distance, opacity) {
 var mid =  e.visibleItems() / 2.0;
     var col =  $p.color(0);
 
@@ -2128,20 +2222,15 @@ xoffset = (( (n)) + 0.5 - mid) * $p.cos(th) * distance;
 
         $p.noFill();
 
-        if (drawNames) {
-$p.strokeWeight(4);
-}
-        else {
-$p.strokeWeight(1);
-}
+        $p.strokeWeight(4);
 
         if ($p.__instanceof(e.edges[n].item , Show)) {
 $p.colorMode($p.RGB);
-            $p.stroke(COLOR_EDGE_DEFAULT);
+            $p.stroke(hoverColor(COLOR_EDGE_DEFAULT, opacity));
             $p.colorMode($p.HSB);
 }
         else if ($p.__instanceof(e.edges[n].item , Person)) {
-$p.stroke(col);
+$p.stroke(hoverColor(col, opacity));
 }
 
         $p.bezier( v1.x, v1.y,
@@ -2149,12 +2238,8 @@ $p.stroke(col);
         xm + xoffset, ym + yoffset,
         v2.x, v2.y);
 
-        if (drawNames) {
-if ($p.__instanceof(e.edges[n].item , Person)) {
-$p.fill(col);
-}
-            $p.text(e.edges[n].item.name, xm + xoffset, ym + yoffset);
-}
+        $p.fill(hoverColor($p.__instanceof(e.edges[n].item , Person )? col : COLOR_EDGE_AXES, opacity));
+        $p.text(e.edges[n].item.name, xm + xoffset, ym + yoffset);
 }
 }
 $p.drawEdge = drawEdge;

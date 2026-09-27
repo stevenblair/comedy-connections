@@ -39,6 +39,8 @@ final color COLOR_EDGE_AXES = color(127, 127, 127, 250/*64, 128, 128, 200*/);
 final color COLOR_VERTEX_DEFAULT = color(64, 128, 187, 190);
 final color COLOR_VERTEX_HIGHLIGHT = color(64, 187, 128, 190);    // too "bright"?
 final color COLOR_VERTEX_DIM = color(64, 128, 187, 40);
+final float HOVER_DIM_OPACITY = 0.4;
+final float HOVER_FADE_TIME = 100.0;
 final float MAX_HUE = 235.0;        // less than 255.0 to provide better discrimination between colours at extremes
 PFont font;
 PFont fontBold;
@@ -46,6 +48,10 @@ PFont fontBold;
 
 boolean dragging = false;
 int draggedVertex = -1;
+boolean mouseInGraph = false;
+int hoveredVertex = -1;
+int hoveredEdge = -1;
+int lastHoverFrame = -1;
 int sortedPerson[];
 int selectedPerson = -1;
 
@@ -100,6 +106,9 @@ void resetData() {
 
 void createGraph() {
     mouseReleased();
+    hoveredVertex = -1;
+    hoveredEdge = -1;
+    lastHoverFrame = -1;
     vertices = null;
     edges = null;
     vertices = new Vertex[max(MAX_PEOPLE, MAX_SHOWS)];
@@ -362,18 +371,22 @@ void changeLayoutMode(int mode) {
 }
 
 void mouseMoved() {
+    mouseInGraph = true;
     loop();
 }
 
 void mouseOver() {
+    mouseInGraph = true;
     loop();
 }
 
 void mouseOut() {
+    mouseInGraph = false;
     loop();
 }
 
 void mouseDragged() {
+    mouseInGraph = true;
     loop();
     if (draggedVertex < 0) {
         return;
@@ -396,6 +409,7 @@ void mouseReleased() {
 }
 
 void mousePressed() {
+    mouseInGraph = true;
     loop();
     if (mouseButton != LEFT) {
         return;
@@ -410,7 +424,7 @@ void mousePressed() {
     }
 }
 
-boolean mouseIsOverLine(float x1, float y1, float x2, float y2) {
+boolean mouseIsOverLine(float x1, float y1, float x2, float y2, float threshold) {
     float d = dist(x1, y1, x2, y2);
     float d1 = dist(x1, y1, mouseX, mouseY);
     float d2 = dist(x2, y2, mouseX, mouseY);
@@ -421,11 +435,105 @@ boolean mouseIsOverLine(float x1, float y1, float x2, float y2) {
     }
 
     // distance between vertices must be similar to sum of distances from each vertex to mouse
-    if (d1 + d2 < d + MOUSE_OVER_LINE_DISTANCE_THRESHOLD) {
+    if (d1 + d2 < d + threshold) {
         return true;
     }
 
     return false;
+}
+
+boolean updateHover() {
+    int now = millis();
+    int nextVertex = draggedVertex;
+    int nextEdge = -1;
+
+    if (mouseInGraph && nextVertex < 0) {
+        // Give the topmost node priority over any connections beneath it.
+        for (int i = vertexCount - 1; i >= 0; i--) {
+            Vertex v = vertices[i];
+            if (v.item.visible() && dist(v.x, v.y, mouseX, mouseY) < max(5, v.numberOfEdges * VERTEX_RADIUS_SCALE)) {
+                nextVertex = i;
+                break;
+            }
+        }
+        // A small exit margin prevents tiny pointer movements from losing focus.
+        if (nextVertex < 0 && hoveredVertex >= 0) {
+            Vertex v = vertices[hoveredVertex];
+            if (v.item.visible() && dist(v.x, v.y, mouseX, mouseY) < max(5, v.numberOfEdges * VERTEX_RADIUS_SCALE) + 4) {
+                nextVertex = hoveredVertex;
+            }
+        }
+        if (nextVertex < 0 && hoveredEdge >= 0) {
+            MultiEdge e = edges[hoveredEdge];
+            if (e.vertexA.item.visible() && e.vertexB.item.visible() && mouseIsOverLine(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y, MOUSE_OVER_LINE_DISTANCE_THRESHOLD * 2.5)) {
+                nextEdge = hoveredEdge;
+            }
+        }
+        if (nextVertex < 0 && nextEdge < 0) {
+            float closestDistance = width * width + height * height;
+            for (int i = 0; i < edgeCount; i++) {
+                MultiEdge e = edges[i];
+                if (e.vertexA.item.visible() && e.vertexB.item.visible() && mouseIsOverLine(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y, MOUSE_OVER_LINE_DISTANCE_THRESHOLD)) {
+                    float dx = e.vertexB.x - e.vertexA.x;
+                    float dy = e.vertexB.y - e.vertexA.y;
+                    float cross = dx * (mouseY - e.vertexA.y) - dy * (mouseX - e.vertexA.x);
+                    float distanceSquared = cross * cross / (dx * dx + dy * dy);
+                    if (distanceSquared < closestDistance) {
+                        closestDistance = distanceSquared;
+                        nextEdge = i;
+                    }
+                }
+            }
+        }
+    }
+
+    hoveredVertex = nextVertex;
+    hoveredEdge = nextEdge;
+
+    for (int i = 0; i < vertexCount; i++) vertices[i].focused = false;
+    if (hoveredVertex >= 0) vertices[hoveredVertex].focused = true;
+    for (int i = 0; i < edgeCount; i++) {
+        MultiEdge e = edges[i];
+        e.focused = hoveredVertex >= 0 ? e.vertexA == vertices[hoveredVertex] || e.vertexB == vertices[hoveredVertex] : i == hoveredEdge;
+        if (e.focused) {
+            e.vertexA.focused = true;
+            e.vertexB.focused = true;
+        }
+    }
+
+    // Respond on the first frame and finish a full fade within 100 ms.
+    // Continue from the current opacity when the pointer changes direction.
+    float elapsed = lastHoverFrame < 0 ? 16 : min(now - lastHoverFrame, 50);
+    float step = elapsed / HOVER_FADE_TIME;
+    lastHoverFrame = now;
+    boolean active = hoveredVertex >= 0 || hoveredEdge >= 0;
+    boolean animating = false;
+    for (int i = 0; i < vertexCount; i++) {
+        Vertex v = vertices[i];
+        float opacity = active && !v.focused ? HOVER_DIM_OPACITY : 1.0;
+        float highlight = i == hoveredVertex ? 1.0 : 0.0;
+        v.hoverOpacity = fadeHover(v.hoverOpacity, opacity, step * (1.0 - HOVER_DIM_OPACITY));
+        v.hoverHighlight = fadeHover(v.hoverHighlight, highlight, step);
+        if (v.hoverOpacity != opacity || v.hoverHighlight != highlight) animating = true;
+    }
+    for (int i = 0; i < edgeCount; i++) {
+        MultiEdge e = edges[i];
+        float opacity = active && !e.focused ? HOVER_DIM_OPACITY : 1.0;
+        float highlight = i == hoveredEdge ? 1.0 : 0.0;
+        e.hoverOpacity = fadeHover(e.hoverOpacity, opacity, step * (1.0 - HOVER_DIM_OPACITY));
+        e.hoverHighlight = fadeHover(e.hoverHighlight, highlight, step);
+        e.anim = 1.0 + 20.0 * e.hoverHighlight;
+        if (e.hoverOpacity != opacity || e.hoverHighlight != highlight) animating = true;
+    }
+    return animating;
+}
+
+float fadeHover(float value, float target, float step) {
+    return abs(target - value) <= step ? target : value + (target > value ? step : -step);
+}
+
+color hoverColor(color c, float opacity) {
+    return opacity < 1.0 ? color(c, alpha(c) * opacity) : c;
 }
 
 
@@ -523,6 +631,10 @@ void draw() {
         }
     }
 
+    if (updateHover()) animating = true;
+    boolean hoverActive = hoveredVertex >= 0 || hoveredEdge >= 0;
+    int passes = hoverActive ? 2 : 1;
+
     colorMode(HSB);
     background(0);        // fill background black
     textAlign(RIGHT);
@@ -561,37 +673,21 @@ void draw() {
     strokeWeight(1);
     colorMode(HSB);
     
-    for (int k = 0; k < edgeCount; k++) {
-        if (edges[k].vertexA.item.visible() && edges[k].vertexB.item.visible()) {
-            if (mouseIsOverLine(edges[k].vertexA.x, edges[k].vertexA.y, edges[k].vertexB.x, edges[k].vertexB.y)) {
-                if (edges[k].anim < 21.0) {
-                    edges[k].anim = edges[k].anim + 5.0;
-                    animating = true;
+    // Draw dimmed items first so the focused connections remain readable.
+    for (int pass = 0; pass < passes; pass++) {
+        for (int k = 0; k < edgeCount; k++) {
+            boolean dimmed = hoverActive && !edges[k].focused;
+            if (hoverActive && dimmed != (pass == 0)) continue;
+            if (edges[k].vertexA.item.visible() && edges[k].vertexB.item.visible()) {
+                MultiEdge e = edges[k];
+                // Crossfade the aggregate line and its expanded, labelled curves.
+                if (e.hoverHighlight < 1.0) {
+                    stroke(hoverColor(mode == MODE_SHOWS_VERTICES ? e.colorMix : COLOR_EDGE_DEFAULT, e.hoverOpacity * (1.0 - e.hoverHighlight)));
+                    strokeWeight((float) (e.numberOfEdges * e.numberOfEdges * EDGE_THICKNESS_SCALE)); // non-linear scaling: exaggerates "connective-ness" to make graphs less "messy" and useless
+                    line(e.vertexA.x, e.vertexA.y, e.vertexB.x, e.vertexB.y);
                 }
-                else {
-                    edges[k].anim = 21.0;
-                }
-
-                drawEdge(edges[k], edges[k].vertexA, edges[k].vertexB, edges[k].anim, true);
-            }
-            else {
-                if (edges[k].anim > 1.0) {
-                    edges[k].anim = edges[k].anim - 5.0;
-                    animating = true;
-                }
-                else {
-                    edges[k].anim = 1.0;
-                }
-
-                if (edges[k].anim == 1.0) {
-                    if (mode == MODE_SHOWS_VERTICES) {
-                        stroke(edges[k].colorMix);
-                    }
-                    strokeWeight((float) (edges[k].numberOfEdges * edges[k].numberOfEdges * EDGE_THICKNESS_SCALE)); // non-linear scaling: exaggerates "connective-ness" to make graphs less "messy" and useless
-                    line(edges[k].vertexA.x, edges[k].vertexA.y, edges[k].vertexB.x, edges[k].vertexB.y);
-                }
-                else {
-                    drawEdge(edges[k], edges[k].vertexA, edges[k].vertexB, edges[k].anim, false);
+                if (e.hoverHighlight > 0.0) {
+                    drawEdge(e, e.vertexA, e.vertexB, e.anim, e.hoverOpacity * e.hoverHighlight);
                 }
             }
         }
@@ -602,34 +698,24 @@ void draw() {
     textAlign(LEFT);
     textFont(font);
 
-    for (j = 0; j < vertexCount; j++) {
-        // Disable shape stroke/border
-        noStroke();
+    for (int pass = 0; pass < passes; pass++) {
+        for (int j = 0; j < vertexCount; j++) {
+            boolean dimmed = hoverActive && !vertices[j].focused;
+            if (hoverActive && dimmed != (pass == 0)) continue;
+            // Disable shape stroke/border
+            noStroke();
 
-        // Cache diameter and radius of current circle
-        float radi = max(5, vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE);
-        float diam = radi * 2.0;
+            // Cache diameter and radius of current circle
+            float radi = max(5, vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE);
+            float diam = radi * 2.0;
 
-        if (j == draggedVertex || dist(vertices[j].x, vertices[j].y, mouseX, mouseY) < radi) {
-            fill(COLOR_VERTEX_HIGHLIGHT);
-        }
-        else {
-            colorMode(RGB);
-            // Keep fill color blue
-            if (vertices[j].item instanceof Person) {
-                fill(((Person) vertices[j].item).c);
+            color col = vertices[j].item instanceof Person ? ((Person) vertices[j].item).c : COLOR_VERTEX_DEFAULT;
+            if (vertices[j].hoverHighlight > 0.0) col = lerpColor(col, COLOR_VERTEX_HIGHLIGHT, vertices[j].hoverHighlight);
+            fill(hoverColor(col, vertices[j].hoverOpacity));
+
+            if (selectedPerson != -1 && !arrayFind(getConnections(j, j), selectedPerson)) {
+                fill(hoverColor(COLOR_VERTEX_DIM, vertices[j].hoverOpacity));
             }
-            else {
-                fill(COLOR_VERTEX_DEFAULT);
-            }
-        }
-
-        if (selectedPerson == -1 || (selectedPerson > -1 && arrayFind(getConnections(j, j), selectedPerson))) {
-            ellipse(vertices[j].x, vertices[j].y, diam, diam);
-            text(vertices[j].item.name, vertices[j].x + 2, vertices[j].y - 5 - radi);
-        }
-        else {
-            fill(COLOR_VERTEX_DIM);
             ellipse(vertices[j].x, vertices[j].y, diam, diam);
             text(vertices[j].item.name, vertices[j].x + 2, vertices[j].y - 5 - radi);
         }
@@ -637,11 +723,12 @@ void draw() {
 
     // Retain the last frame until input or a layout change needs another one.
     if (!animating) {
+        lastHoverFrame = -1;
         noLoop();
     }
 }
 
-void drawEdge(MultiEdge e, Vertex v1, Vertex v2, float distance, boolean drawNames) {
+void drawEdge(MultiEdge e, Vertex v1, Vertex v2, float distance, float opacity) {
     float mid = e.visibleItems() / 2.0;
     color col = color(0);
 
@@ -693,20 +780,15 @@ void drawEdge(MultiEdge e, Vertex v1, Vertex v2, float distance, boolean drawNam
 
         noFill();
 
-        if (drawNames) {
-            strokeWeight(4);
-        }
-        else {
-            strokeWeight(1);
-        }
+        strokeWeight(4);
 
         if (e.edges[n].item instanceof Show) {
             colorMode(RGB);
-            stroke(COLOR_EDGE_DEFAULT);
+            stroke(hoverColor(COLOR_EDGE_DEFAULT, opacity));
             colorMode(HSB);
         }
         else if (e.edges[n].item instanceof Person) {
-            stroke(col);
+            stroke(hoverColor(col, opacity));
         }
 
         bezier( v1.x, v1.y,
@@ -714,12 +796,8 @@ void drawEdge(MultiEdge e, Vertex v1, Vertex v2, float distance, boolean drawNam
         xm + xoffset, ym + yoffset,
         v2.x, v2.y);
 
-        if (drawNames) {
-            if (e.edges[n].item instanceof Person) {
-                fill(col);
-            }
-            text(e.edges[n].item.name, xm + xoffset, ym + yoffset);
-        }
+        fill(hoverColor(e.edges[n].item instanceof Person ? col : COLOR_EDGE_AXES, opacity));
+        text(e.edges[n].item.name, xm + xoffset, ym + yoffset);
     }
 }
 
@@ -803,6 +881,9 @@ class Show extends Item {
 
 public class Vertex {
     public Item item;
+    public boolean focused = false;
+    public float hoverOpacity = 1.0;
+    public float hoverHighlight = 0.0;
     
     public Edge edge[];         // 'cache' of edges connecting this vertex
     public int numberOfEdges;
@@ -857,6 +938,9 @@ public class MultiEdge extends Edge {
     public float anim = 1.0;
     public Spring spring;
     public color colorMix;
+    public boolean focused = false;
+    public float hoverOpacity = 1.0;
+    public float hoverHighlight = 0.0;
     
     public MultiEdge(Item i, Vertex a, Vertex b) {
         super(i, a, b);

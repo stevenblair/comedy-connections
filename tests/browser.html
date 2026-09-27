@@ -36,6 +36,22 @@ frame.addEventListener('load', async () => {
         const canvas = doc.getElementById('ComedyConnections');
         const errors = [];
         app.addEventListener('error', event => errors.push(event.message));
+        const showIds = new Set(app.Data.show.map(show => show.id));
+        const personIds = new Set(app.Data.person.map(person => person.id));
+        const showKeys = new Set();
+        for (const show of app.Data.show) {
+            const key = JSON.stringify([show.type, show.title.trim().toLowerCase(), show.year]);
+            check(!showKeys.has(key), 'Duplicate show: ' + show.title + ' (' + show.year + ')');
+            showKeys.add(key);
+        }
+        check(showIds.size === app.Data.show.length, 'Duplicate show ID');
+        const creditKeys = new Set();
+        for (const credit of app.Data.personToShow) {
+            const key = credit.personId + ':' + credit.showId;
+            check(showIds.has(credit.showId) && personIds.has(credit.personId), 'Credit refers to a missing show or person');
+            check(!creditKeys.has(key), 'Duplicate credit: ' + key);
+            creditKeys.add(key);
+        }
         const click = id => doc.getElementById(id).click();
         function filter(value) {
             const input = doc.getElementById('filterText');
@@ -82,6 +98,191 @@ frame.addEventListener('load', async () => {
                 passed(view + ', ' + layout + ': animation settles, then drawing stops');
             }
         }
+
+        // Merged records must render once and retain credits from both old IDs.
+        for (const [title, cast] of [
+            ['Little Britain', ['Steve Coogan', 'Matt Lucas', 'David Walliams']],
+            ['Saxondale', ['Steve Coogan', 'Mark Williams', 'James Bachman', 'Kevin Eldon', 'Matt Berry']]
+        ]) {
+            filter(title);
+            await idle();
+            check(p.getVertexCount() === 1 && p.getVertex(0).item.name === title, title + ' did not render as one node');
+            const castNames = app.findPersonInShows(title).map(person => person.personName);
+            check(cast.every(name => castNames.includes(name)), title + ' lost a connection when its duplicate was merged');
+        }
+        filter('');
+        await idle();
+        passed('Show records and credits are unique; merged shows render once and preserve their connections');
+
+        // Three independent pairs make it possible to check the rendered opacity
+        // of neighbours and unrelated items without overlapping lines or labels.
+        const savedData = app.UsedData;
+        const fixture = {
+            person: Array.from({length: 6}, (_, i) => ({id: i + 1, name: 'Person ' + (i + 1), dob: 1950 + i * 5})),
+            show: Array.from({length: 6}, (_, i) => ({id: i + 1, title: 'Show ' + (i + 1), year: 1980 + i})),
+            personToShow: Array.from({length: 6}, (_, i) => [0, 1].map(j => ({personId: i + 1, showId: Math.floor(i / 2) * 2 + j + 1}))).flat()
+        };
+        const context = canvas.getContext('2d');
+        // Warm up pixel reads before the baseline redraw so Chrome does not
+        // switch canvas rasterisation halfway through these comparisons.
+        for (let i = 0; i < 3; i++) context.getImageData(0, 0, 1, 1);
+        const pixel = (x, y) => Array.from(context.getImageData(x, y, 1, 1).data).slice(0, 3);
+        const samePixel = (a, b) => a.every((value, i) => value === b[i]);
+        const brightness = rgb => rgb.reduce((sum, value) => sum + value, 0);
+        function checkDimmed(x, y, original, message) {
+            const value = brightness(pixel(x, y));
+            check(value > brightness(original) * 0.3 && value < brightness(original) * 0.5, message);
+        }
+        async function sampleFade(action, x, y) {
+            const samples = [brightness(pixel(x, y))];
+            const times = [0];
+            const start = performance.now();
+            action();
+            const deadline = start + 250;
+            while (performance.now() < deadline) {
+                await delay(10);
+                samples.push(brightness(pixel(x, y)));
+                times.push(performance.now() - start);
+            }
+            await idle();
+            samples.push(brightness(pixel(x, y)));
+            times.push(performance.now() - start);
+            return {samples, times};
+        }
+        function checkFade({samples, times}, direction, message) {
+            const start = samples[0], end = samples[samples.length - 1];
+            check((end - start) * direction > 10, message + ': no opacity change');
+            const intermediate = new Set(samples.filter(value => value > Math.min(start, end) + 3 && value < Math.max(start, end) - 3));
+            check(intermediate.size >= 3, message + ': opacity changed abruptly');
+            check(samples.every((value, i) => i === 0 || (value - samples[i - 1]) * direction >= -2), message + ': opacity flickered');
+            const firstChange = samples.findIndex(value => Math.abs(value - start) > 3);
+            const settled = samples.findIndex((value, i) => Math.abs(value - end) <= 2 && samples.slice(i).every(next => Math.abs(next - end) <= 2));
+            check(times[firstChange] < 80, message + ': hover response was delayed');
+            check(times[settled] < 180, message + ': fade took too long to settle');
+        }
+        function place(index, x, y) {
+            const v = p.getVertex(index);
+            v.x = v.newX = x;
+            v.y = v.newY = y;
+            v.p.position.set(x, y, 0);
+        }
+        for (const view of [0, 1]) {
+            app.UsedData = fixture;
+            p.setViewMode(view);
+            p.resetData();
+            p.createGraph();
+            p.changeLayoutMode(0);
+            [[100, 90], [500, 90], [100, 260], [500, 260], [700, 400], [1100, 400]].forEach(([x, y], i) => place(i, x, y));
+            mouse('mousemove', 1, 1);
+            await idle();
+            const normal = canvas.toDataURL();
+            const neighbour = pixel(500, 93);
+            const unrelatedNode = pixel(100, 263);
+            const unrelatedEdge = pixel(300, 260);
+            const relatedEdge = pixel(300, 90);
+
+            checkFade(await sampleFade(() => mouse('mousemove', 300, 90), 100, 263), -1, 'Connection fade-in');
+            checkDimmed(100, 263, unrelatedNode, 'Connection hover did not dim unrelated nodes');
+            checkDimmed(300, 260, unrelatedEdge, 'Connection hover did not dim other connections');
+            check(samePixel(pixel(500, 93), neighbour), 'Connection endpoint was dimmed');
+            checkFade(await sampleFade(() => mouse('mouseout', 300, 90), 100, 263), 1, 'Connection fade-out');
+            check(canvas.toDataURL() === normal, 'Leaving the canvas did not clear connection focus');
+
+            checkFade(await sampleFade(() => mouse('mousemove', 100, 90), 100, 263), -1, 'Node fade-in');
+            checkDimmed(100, 263, unrelatedNode, 'Node hover did not dim unrelated nodes');
+            checkDimmed(300, 260, unrelatedEdge, 'Node hover did not dim unrelated connections');
+            check(samePixel(pixel(500, 93), neighbour), 'Node neighbour was dimmed');
+            check(samePixel(pixel(300, 90), relatedEdge), 'Node connection was dimmed');
+            for (const [x, y] of [[107, 90], [104, 96], [106, 94], [100, 90]]) {
+                mouse('mousemove', x, y);
+                await delay(120);
+                check(p.getVertex(0).focused && !p.getVertex(2).focused, 'Small movements at a node edge lost focus');
+                checkDimmed(100, 263, unrelatedNode, 'Node boundary movement flashed unrelated items');
+            }
+            checkFade(await sampleFade(() => mouse('mousemove', 1, 1), 100, 263), 1, 'Node fade-out');
+            check(canvas.toDataURL() === normal, 'Leaving a node did not restore the original image');
+
+            // A brief pass should respond promptly without jumping to full dimming.
+            mouse('mousemove', 300, 90);
+            await delay(35);
+            const flyoverBrightness = brightness(pixel(100, 263));
+            check(flyoverBrightness > brightness(unrelatedNode) * 0.5 && flyoverBrightness < brightness(unrelatedNode), 'A brief flyover did not begin a gentle fade');
+            mouse('mousemove', 1, 1);
+            await idle();
+            check(canvas.toDataURL() === normal, 'A brief flyover left hover styling behind');
+            check(!p.getVertex(0).focused, 'A brief flyover kept a connection focused');
+
+            // Changing connections should crossfade without brightening everything in between.
+            mouse('mousemove', 300, 90);
+            await idle();
+            const thirdPair = brightness(pixel(700, 403));
+            const switchSamples = await sampleFade(() => mouse('mousemove', 300, 260), 700, 403);
+            check(switchSamples.samples.every(value => Math.abs(value - thirdPair) <= 2), 'Switching connections flashed unrelated items');
+            check(p.getVertex(2).focused && p.getVertex(3).focused && !p.getVertex(0).focused, 'Connection focus did not follow the pointer');
+            mouse('mouseout', 300, 260);
+            await idle();
+
+            // Reverse direction before a fade finishes and inspect every rendered frame.
+            const draw = p.draw;
+            const reversalSamples = [];
+            p.draw = function () {
+                draw();
+                reversalSamples.push(brightness(pixel(100, 263)));
+            };
+            try {
+                mouse('mousemove', 100, 90);
+                await delay(50);
+                mouse('mouseout', 100, 90);
+                await delay(30);
+                mouse('mousemove', 100, 90);
+                await delay(50);
+                mouse('mouseout', 100, 90);
+                await idle();
+            } finally {
+                p.draw = draw;
+            }
+            const normalBrightness = brightness(unrelatedNode);
+            check(new Set(reversalSamples).size >= 5, 'Rapid hover reversal did not fade');
+            check(reversalSamples.every((value, i) => i === 0 || Math.abs(value - reversalSamples[i - 1]) < normalBrightness * 0.35), 'Reversing a fade caused an abrupt opacity jump');
+            check(canvas.toDataURL() === normal, 'Rapid hover reversal did not restore the original image');
+
+            // A connection passing behind a node must not steal its hover.
+            await wakes(() => { place(2, 50, 90); place(3, 600, 90); p.loop(); });
+            await idle();
+            const crossingEdge = pixel(580, 90);
+            await wakes(() => mouse('mousemove', 100, 90));
+            await idle();
+            check(p.getVertex(0).focused && p.getVertex(1).focused && !p.getVertex(2).focused && !p.getVertex(3).focused, 'Node did not take priority over the connection beneath it');
+            checkDimmed(580, 90, crossingEdge, 'Connection beneath a hovered node was not dimmed');
+            await wakes(() => mouse('mouseout', 100, 90));
+            await idle();
+
+            // At a line crossing, focus one connection rather than the whole intersection.
+            await wakes(() => {
+                [[100, 100], [500, 400], [100, 400], [500, 100]].forEach(([x, y], i) => place(i, x, y));
+                p.loop();
+            });
+            await idle();
+            await wakes(() => mouse('mousemove', 300, 250));
+            await idle();
+            check(Array.from({length: 6}, (_, i) => p.getVertex(i)).filter(v => v.focused).length === 2, 'A line crossing focused more than one connection');
+            const crossingFocus = Array.from({length: 6}, (_, i) => p.getVertex(i).focused);
+            for (const [x, y] of [[302, 248], [298, 252], [302, 252], [298, 248], [300, 250]]) {
+                mouse('mousemove', x, y);
+                await delay(120);
+                check(crossingFocus.every((focused, i) => p.getVertex(i).focused === focused), 'Small movements at a crossing switched connections');
+            }
+            await wakes(() => mouse('mouseout', 300, 250));
+            await idle();
+            passed((view === 0 ? 'People' : 'Shows') + ': hover responds promptly, fades smoothly, preserves neighbours, stays steady at crossings, and clears on exit');
+        }
+        app.UsedData = savedData;
+        p.setViewMode(1);
+        p.resetData();
+        p.createGraph();
+        p.changeLayoutMode(4);
+        mouse('mousemove', 1, 1);
+        await idle();
 
         // Follow a real connection to exercise both directions of its hover animation.
         const edge = Array.from({length: p.getVertexCount()}, (_, i) => p.getVertex(i))
