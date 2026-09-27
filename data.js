@@ -80,7 +80,9 @@ var Data = {
         {id: 53, type: "TV", title: "House", year: 2004},
         {id: 54, type: "TV", title: "Time Trumpet", year: 2006},
         {id: 55, type: "TV", title: "Jam", year: 2000},
-        {id: 56, type: "TV", title: "Little Britain", year: 2003}
+        {id: 56, type: "TV", title: "Little Britain", year: 2003},
+        {id: 57, type: "TV", title: "Bruiser", year: 2000},
+        {id: 58, type: "TV", title: "Man to Man with Dean Learner", year: 2006}
     ],
     person: [
         {id: 1, name: "Bill Bailey", dob: 1964},
@@ -128,7 +130,10 @@ var Data = {
         {id: 43, name: "Stephen Merchant", dob: 1974},
         {id: 44, name: "Matt Lucas", dob: 1974},
         {id: 45, name: "David Walliams", dob: 1971},
-        {id: 46, name: "Paterson Joseph", dob: 1964}
+        {id: 46, name: "Paterson Joseph", dob: 1964},
+        {id: 47, name: "Matt Berry", dob: 1974},
+        {id: 48, name: "Dermot Morgan", dob: 1952},
+        {id: 49, name: "Stephen Mangan", dob: 1968}
     ],
     personToShow: [
         {personId: 1, showId: 1},
@@ -215,9 +220,11 @@ var Data = {
         {personId: 12, showId: 13},
         {personId: 12, showId: 2},
         {personId: 12, showId: 35},
+        {personId: 12, showId: 57},
         {personId: 13, showId: 7},
         {personId: 13, showId: 13},
         {personId: 13, showId: 35},
+        {personId: 13, showId: 57},
         {personId: 14, showId: 7},
         {personId: 14, showId: 13},
         {personId: 14, showId: 35},
@@ -227,6 +234,7 @@ var Data = {
         {personId: 14, showId: 1},
         {personId: 14, showId: 8},
         {personId: 14, showId: 5},
+        {personId: 14, showId: 57},
         {personId: 15, showId: 10},
         {personId: 15, showId: 11},
         {personId: 15, showId: 36},
@@ -278,11 +286,14 @@ var Data = {
         {personId: 28, showId: 10},
         {personId: 28, showId: 19},
         {personId: 28, showId: 54},
+        {personId: 28, showId: 57},
+        {personId: 28, showId: 58},
         {personId: 38, showId: 55},
         {personId: 29, showId: 19},
         {personId: 29, showId: 22},
         {personId: 29, showId: 18},
         {personId: 29, showId: 54},
+        {personId: 29, showId: 58},
         {personId: 30, showId: 28},
         {personId: 30, showId: 22},
         {personId: 30, showId: 1},
@@ -342,6 +353,7 @@ var Data = {
         {personId: 42, showId: 27},
         {personId: 42, showId: 28},
         {personId: 42, showId: 42},
+        {personId: 42, showId: 57},
         {personId: 43, showId: 10},
         {personId: 43, showId: 11},
         {personId: 43, showId: 28},
@@ -360,6 +372,16 @@ var Data = {
         {personId: 45, showId: 27},
         {personId: 45, showId: 32},
         {personId: 46, showId: 7},
-        {personId: 46, showId: 8}
+        {personId: 46, showId: 8},
+        {personId: 47, showId: 16},
+        {personId: 47, showId: 18},
+        {personId: 47, showId: 19},
+        {personId: 47, showId: 22},
+        {personId: 47, showId: 47},
+        {personId: 47, showId: 49},
+        {personId: 47, showId: 58},
+        {personId: 48, showId: 23},
+        {personId: 49, showId: 3},
+        {personId: 49, showId: 8}
     ]
 }

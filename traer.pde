@@ -65,22 +65,25 @@ public class Attraction implements Force
   public void apply() 
   { if ( on && ( one.isFree() || b.isFree() ) )
       {
-        PVector a2b = PVector.sub(one.position, b.position, new PVector());
-        float a2bDistanceSquared = a2b.dot(a2b);
+        float dx = one.position.x - b.position.x;
+        float dy = one.position.y - b.position.y;
+        float dz = one.position.z - b.position.z;
+        float distanceSquared = dx * dx + dy * dy + dz * dz;
+        if (distanceSquared < distanceMinSquared) distanceSquared = distanceMinSquared;
+        float force = k * one.mass0 * b.mass0 / (distanceSquared * (float)Math.sqrt(distanceSquared));
+        dx *= force;
+        dy *= force;
+        dz *= force;
 
-  if ( a2bDistanceSquared < distanceMinSquared )
-     a2bDistanceSquared = distanceMinSquared;
-
-  float force = k * one.mass0 * b.mass0 / (a2bDistanceSquared * (float)Math.sqrt(a2bDistanceSquared));
-
-        a2b.mult( force );
-
-  // apply
-        if ( b.isFree() )
-     b.force.add( a2b );  
+        if ( b.isFree() ) {
+          b.force.x += dx;
+          b.force.y += dy;
+          b.force.z += dz;
+        }
         if ( one.isFree() ) {
-           a2b.mult(-1f);
-     one.force.add( a2b );
+          one.force.x += dx * -1;
+          one.force.y += dy * -1;
+          one.force.z += dz * -1;
         }
       }
   }
@@ -686,30 +689,35 @@ public class Spring implements Force
   { 
     if ( on && ( one.isFree() || b.isFree() ) )
       {
-        PVector a2b = PVector.sub(one.position, b.position, new PVector());
-
-        float a2bDistance = a2b.mag();  
-  
-  if (a2bDistance!=0f) {
-          a2b.div(a2bDistance);
+        float dx = one.position.x - b.position.x;
+        float dy = one.position.y - b.position.y;
+        float dz = one.position.z - b.position.z;
+        float distance = (float)Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (distance != 0) {
+          dx /= distance;
+          dy /= distance;
+          dz /= distance;
         }
+        float springForce = -(distance - restLength0) * springConstant0;
+        float vx = one.velocity.x - b.velocity.x;
+        float vy = one.velocity.y - b.velocity.y;
+        float vz = one.velocity.z - b.velocity.z;
+        float dampingForce = -damping0 * (dx * vx + dy * vy + dz * vz);
+        float force = springForce + dampingForce;
+        dx *= force;
+        dy *= force;
+        dz *= force;
 
-  // spring force is proportional to how much it stretched 
-  float springForce = -( a2bDistance - restLength0 ) * springConstant0; 
-  
-        PVector vDamping = PVector.sub(one.velocity, b.velocity, new PVector());
-        
-        float dampingForce = -damping0 * a2b.dot(vDamping);
-                          
-  // forceB is same as forceA in opposite direction
-  float r = springForce + dampingForce;
-    
-  a2b.mult(r);
-      
-  if ( one.isFree() )
-     one.force.add( a2b );
-  if ( b.isFree() )
-     b.force.add( PVector.mult(a2b, -1, a2b) );
+        if ( one.isFree() ) {
+          one.force.x += dx;
+          one.force.y += dy;
+          one.force.z += dz;
+        }
+        if ( b.isFree() ) {
+          b.force.x += dx * -1;
+          b.force.y += dy * -1;
+          b.force.z += dz * -1;
+        }
       }
   }
   protected void setA( Particle p ) { one = p; }

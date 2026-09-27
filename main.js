@@ -80,7 +80,7 @@ function findShowsWithPersonIdFast(personIdParam) {
     var listOfShowsNames = [];
     for (var x in UsedData.personToShow) {
         if (UsedData.personToShow[x].personId == personIdParam) {
-            listOfShowsIds.push(Data.personToShow[x].showId);
+            listOfShowsIds.push(UsedData.personToShow[x].showId);
         }
     }
 
@@ -158,26 +158,27 @@ function filter() {
     // apply to visualisation
     var p = Processing.getInstanceById('ComedyConnections');
     if (p) {
+        p.setViewMode(viewMode ? 0 : 1);
         p.resetData();
         p.createGraph();
-        p.setLayout();
+        var arrangement = $("input:radio[name='arrangement']");
+        p.changeLayoutMode(arrangement.index(arrangement.filter(':checked')));
     }
 }
 
-$(function() {$("#filterText").keyup(function(eventObject) {
+$(function() {
+    Processing.disableInit();
+    new Processing(document.getElementById('ComedyConnections'), comedyConnectionsSketch);
+    $("#filterText").on("input", function(eventObject) {
         filter();
     });
     $("#filterMode").buttonset().change(function(eventObject) {
         filter();
     });
     $("#viewMode").buttonset().change(function(eventObject) {
-        var p = Processing.getInstanceById('ComedyConnections');
-        if (p) {
-            p.toggleViewMode();
-        }
         filter();
     });
-    $("#arrangement").buttonset().click(function(eventObject) {
+    $("#arrangement").buttonset().change(function(eventObject) {
         var radioButtons = $("input:radio[name='arrangement']");
         var selectedIndex = radioButtons.index(radioButtons.filter(':checked'));
 
@@ -186,4 +187,12 @@ $(function() {$("#filterText").keyup(function(eventObject) {
             p.changeLayoutMode(selectedIndex);
         }
     });
+    var visualisation = document.getElementById('visualisation');
+    function resizeGraph() {
+        var p = Processing.getInstanceById('ComedyConnections');
+        p.resizeGraph(visualisation.clientWidth, visualisation.clientHeight);
+    }
+    new ResizeObserver(resizeGraph).observe(visualisation);
+    resizeGraph();
+    filter();
 });

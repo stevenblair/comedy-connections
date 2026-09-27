@@ -1,6 +1,4 @@
-/* @pjs crisp=false; 
- * pauseOnBlur=true; 
- */
+/* @pjs crisp=false; pauseOnBlur=true; */
 
 /**
  * Comedy-Connections
@@ -47,6 +45,7 @@ PFont fontBold;
 
 
 boolean dragging = false;
+int draggedVertex = -1;
 int sortedPerson[];
 int selectedPerson = -1;
 
@@ -100,6 +99,7 @@ void resetData() {
 }
 
 void createGraph() {
+    mouseReleased();
     vertices = null;
     edges = null;
     vertices = new Vertex[max(MAX_PEOPLE, MAX_SHOWS)];
@@ -140,7 +140,7 @@ void createGraph() {
 
         for (int j = 0; j < show.size(); j++) {
             for (int k = 0; k < person.size(); k++) {
-                for (int l = 0; l < person.size(); l++) {
+                for (int l = k + 1; l < person.size(); l++) {
                     if (k != l && ((Person)(vertices[k].item)).isInShow(j) && ((Person)(vertices[l].item)).isInShow(j)) {
 
                         MultiEdge e = findEdge(vertices[k], vertices[l]);
@@ -172,7 +172,7 @@ void createGraph() {
         }
         for (int j = 0; j < person.size(); j++) {
             for (int k = 0; k < show.size(); k++) {
-                for (int l = 0; l < show.size(); l++) {
+                for (int l = k + 1; l < show.size(); l++) {
                     Person p = (Person) person.get(j);
 
                     if (k != l && p.isInShow(k) && p.isInShow(l)) {
@@ -196,111 +196,104 @@ void createGraph() {
         edges[j].spring = physics.makeSpring(edges[j].vertexA.p, edges[j].vertexB.p, EDGE_STRENGTH * edges[j].numberOfEdges, EDGE_DAMPING, EDGE_LENGTH / (SPRING_LENGTH_NORMALISATION * float(edges[j].numberOfEdges)));        // linked vertices are "springy"
     }
     for (int j = 0; j < vertexCount; j++) {
-        vertices[j].p.setMass(MASS_NORMALISATION * float(vertices[j].numberOfEdges));
+        vertices[j].p.setMass(MASS_NORMALISATION * max(1, vertices[j].numberOfEdges));
     }
+}
+
+// Centre equal-valued results instead of dividing by zero (for example, one match).
+float layoutPosition(float value, float minimum, float maximum, float extent) {
+    if (minimum == maximum) {
+        return extent / 2.0;
+    }
+    return BORDER + (extent - 2 * BORDER) * (value - minimum) / (maximum - minimum);
 }
 
 void setLayout() {
-    // place vertices on canvas
-    if (layout == LAYOUT_RANDOM_STATIC) {
-        physicsEnabled = false;
-        for (int j = 0; j < vertexCount; j++) {
-            vertices[j].newX = random(BORDER, width - BORDER);
-            vertices[j].newY = random(BORDER, height - BORDER);
+    physicsEnabled = layout == LAYOUT_RANDOM_AUTO;
+    loop();
+    if (vertexCount == 0) {
+        return;
+    }
+    int minYear = mode == MODE_PERSON_VERTICES ? getMinYearOfBirth() : getMinYear(show);
+    int maxYear = mode == MODE_PERSON_VERTICES ? getMaxYearOfBirth() : getMaxYear(show);
+    int minValue = getMinValue();
+    int maxValue = getMaxValue();
+    boolean coincident = true;
+    for (int i = 1; i < vertexCount; i++) {
+        if (dist(vertices[0].x, vertices[0].y, vertices[i].x, vertices[i].y) > 1) {
+            coincident = false;
+            break;
         }
     }
-    else if (layout == LAYOUT_RANDOM_AUTO) {
-        physicsEnabled = true;
-        for (int j = 0; j < vertexCount; j++) {
-            vertices[j].p.position = new PVector(vertices[j].x, vertices[j].y, 0);
-        }
-    }
-    else if (layout == LAYOUT_BY_DATE) {
-        physicsEnabled = false;
 
-        if (mode == MODE_PERSON_VERTICES) {
-            int maxYear = getMaxYearOfBirth();
-            int minYear = getMinYearOfBirth();
-            int gapPerYear = (width - (BORDER * 2)) / (maxYear - minYear);
-            int x = 0;
-            int y = 0;
-
-            for (int j = 0; j < vertexCount; j++) {
-                x = BORDER + (gapPerYear * (((Person) vertices[j].item).yearOfBirth - minYear));
-                y = BORDER + random(BORDER, height - BORDER);
-
-                vertices[j].newX = x;
-                vertices[j].newY = y;
+    for (int j = 0; j < vertexCount; j++) {
+        Vertex v = vertices[j];
+        if (physicsEnabled) {
+            // A rebuilt graph starts at the centre. Separate particles so the
+            // springs and repulsion have a direction in which to apply force.
+            if (coincident && vertexCount > 1) {
+                v.x = random(BORDER, width - BORDER);
+                v.y = random(BORDER, height - BORDER);
             }
+            v.p.position.set(v.x, v.y, 0);
+            v.p.velocity.set(0, 0, 0);
+            continue;
         }
-        else {
-            int maxYear = getMaxYear(show);
-            int minYear = getMinYear(show);
-            int gapPerYear = (width - (BORDER * 2)) / (maxYear - minYear);
-            int x = 0;
-            int y = 0;
-
-            for (int j = 0; j < vertexCount; j++) {
-                x = BORDER + (gapPerYear * (((Show) vertices[j].item).startYear - minYear));
-                y = BORDER + random(BORDER, height - BORDER);
-
-                vertices[j].newX = x;
-                vertices[j].newY = y;
-            }
+        int itemYear = mode == MODE_PERSON_VERTICES ? ((Person) v.item).yearOfBirth : ((Show) v.item).startYear;
+        v.newX = random(BORDER, width - BORDER);
+        v.newY = random(BORDER, height - BORDER);
+        if (layout == LAYOUT_BY_DATE) {
+            v.newX = layoutPosition(itemYear, minYear, maxYear, width);
+        } else if (layout == LAYOUT_BY_VALUE || layout == LAYOUT_BY_DATE_AND_VALUE) {
+            v.newX = layoutPosition(v.numberOfEdges, minValue, maxValue, width);
         }
-    }
-    else if (layout == LAYOUT_BY_VALUE) {
-        physicsEnabled = false;
-
-        int maxValue = getMaxValue();
-        int minValue = getMinValue();
-        int gapPerValue = (width - (BORDER * 2)) / (maxValue - minValue);
-        int x = 0;
-        int y = 0;
-
-        for (int j = 0; j < vertexCount; j++) {
-            x = BORDER + (gapPerValue * (vertices[j].numberOfEdges - minValue));
-            y = BORDER + random(BORDER, height - BORDER);
-
-            vertices[j].newX = x;
-            vertices[j].newY = y;
-        }
-    }
-    else if (layout == LAYOUT_BY_DATE_AND_VALUE) {
-        physicsEnabled = false;
-
-        int maxValue = getMaxValue();
-        int minValue = getMinValue();
-        int gapPerValue = (width - (BORDER * 2)) / (maxValue - minValue);
-        int maxYear = 0;
-        int minYear = 0;
-
-        if (mode == MODE_PERSON_VERTICES) {
-            maxYear = getMaxYearOfBirth();
-            minYear = getMinYearOfBirth();
-        }
-        else {
-            maxYear = getMaxYear(show);
-            minYear = getMinYear(show);
-        }
-        int gapPerYear = (height - (BORDER * 2)) / (maxYear - minYear);
-        int x = 0;
-        int y = 0;
-
-        for (int j = 0; j < vertexCount; j++) {
-            x = BORDER + (gapPerValue * (vertices[j].numberOfEdges - minValue));
-            if (mode == MODE_PERSON_VERTICES) {
-                y = BORDER + (gapPerYear * (((Person) vertices[j].item).yearOfBirth - minYear));
-            }
-            else {
-                y = BORDER + (gapPerYear * (((Show) vertices[j].item).startYear - minYear));
-            }
-
-            vertices[j].newX = x;
-            vertices[j].newY = y;
+        if (layout == LAYOUT_BY_DATE_AND_VALUE) {
+            v.newY = layoutPosition(itemYear, minYear, maxYear, height);
         }
     }
 }
+
+// Browser controls use these methods without depending on Processing internals.
+int getVertexCount() { return vertexCount; }
+int getEdgeCount() { return edgeCount; }
+Vertex getVertex(int index) { return vertices[index]; }
+
+void setViewMode(int viewMode) {
+    mode = viewMode;
+}
+
+float resizePosition(float value, float oldExtent, float newExtent) {
+    if (oldExtent <= 2 * BORDER) {
+        return newExtent / 2.0;
+    }
+    return constrain(BORDER + (value - BORDER) * (newExtent - 2 * BORDER) / (oldExtent - 2 * BORDER), BORDER, newExtent - BORDER);
+}
+
+void resizeGraph(int graphWidth, int graphHeight) {
+    graphWidth = max(2 * BORDER + 1, graphWidth);
+    graphHeight = max(2 * BORDER + 1, graphHeight);
+    if (width == graphWidth && height == graphHeight) {
+        return;
+    }
+    int oldWidth = width;
+    int oldHeight = height;
+    mouseReleased();
+    size(graphWidth, graphHeight);
+    textFont(font);
+    textLeading(10);
+
+    for (int i = 0; i < vertexCount; i++) {
+        Vertex v = vertices[i];
+        v.x = resizePosition(v.x, oldWidth, width);
+        v.y = resizePosition(v.y, oldHeight, height);
+        v.newX = resizePosition(v.newX, oldWidth, width);
+        v.newY = resizePosition(v.newY, oldHeight, height);
+        v.p.position.set(v.x, v.y, 0);
+        v.p.velocity.set(0, 0, 0);
+    }
+    loop();
+}
+
 
 int getMaxYearOfBirth() {
     int max = 0;
@@ -368,44 +361,54 @@ void changeLayoutMode(int mode) {
     }
 }
 
-void toggleViewMode() {
-    noLoop();
-    if (mode == MODE_SHOWS_VERTICES) {
-        mode = MODE_PERSON_VERTICES;
-    }
-    else {
-        mode = MODE_SHOWS_VERTICES;
-    }
-    createGraph();
-    setLayout();
+void mouseMoved() {
+    loop();
+}
+
+void mouseOver() {
+    loop();
+}
+
+void mouseOut() {
     loop();
 }
 
 void mouseDragged() {
+    loop();
+    if (draggedVertex < 0) {
+        return;
+    }
     dragging = true;
+    Vertex v = vertices[draggedVertex];
+    v.x = v.newX = constrain(mouseX, BORDER, width - BORDER);
+    v.y = v.newY = constrain(mouseY, BORDER, height - BORDER);
+    v.p.position.set(v.x, v.y, 0);
+    v.p.velocity.set(0, 0, 0);
 }
 
 void mouseReleased() {
+    if (draggedVertex >= 0 && draggedVertex < vertexCount) {
+        vertices[draggedVertex].p.makeFree();
+    }
     dragging = false;
+    draggedVertex = -1;
+    loop();
 }
 
 void mousePressed() {
-    // !TODO: find person under mouse
-    for (int i = 0; i < person.size(); i++) {
-        if (((Person) person.get(i)).hovered == true) {
-            ((Person) person.get(i)).selected = !((Person) person.get(i)).selected;
+    loop();
+    if (mouseButton != LEFT) {
+        return;
+    }
+    for (int i = vertexCount - 1; i >= 0; i--) {
+        Vertex v = vertices[i];
+        if (dist(v.x, v.y, mouseX, mouseY) <= max(6, v.numberOfEdges * VERTEX_RADIUS_SCALE)) {
+            draggedVertex = i;
+            v.p.makeFixed();
+            break;
         }
     }
 }
-
-//void mouseClicked() {
-//    if (mouseButton == LEFT) {
-//        ;
-//    }
-//    else if (mouseButton == RIGHT) {
-//        ;
-//    }
-//}
 
 boolean mouseIsOverLine(float x1, float y1, float x2, float y2) {
     float d = dist(x1, y1, x2, y2);
@@ -452,9 +455,10 @@ boolean arrayFind(int a[], int e) {
 }
 
 int getMaxYear(ArrayList show) {
-    Show s;
-    int maxYear = year();
-
+    int maxYear = 0;
+    for (int i = 0; i < show.size(); i++) {
+        maxYear = max(maxYear, ((Show) show.get(i)).startYear);
+    }
     return maxYear;
 }
 
@@ -492,29 +496,17 @@ void setup() {
 }
 
 void draw() {
+    boolean animating = physicsEnabled && vertexCount > 0;
     if (physicsEnabled) {
         physics.tick();
 
         for (int i = 0; i < vertexCount; ++i) {
-            // add slight randomness to stimulate motion
-            vertices[i].p.position = new PVector(vertices[i].p.position.x + random(-RANDOM_MOVEMENT, RANDOM_MOVEMENT), vertices[i].p.position.y + random(-RANDOM_MOVEMENT, RANDOM_MOVEMENT), 0);
-
-            vertices[i].x = vertices[i].p.position.x;
-            vertices[i].y = vertices[i].p.position.y;
-
-            // lock to visible boundaries
-            if (vertices[i].x < 0) {
-                vertices[i].x = 0;
-            }
-            else if (vertices[i].x > width) {
-                vertices[i].x = width;
-            }
-            if (vertices[i].y < 0) {
-                vertices[i].y = 0;
-            }
-            else if (vertices[i].y > height) {
-                vertices[i].y = height;
-            }
+            Vertex v = vertices[i];
+            // Keep the simulation and the displayed position in the same bounds.
+            v.p.position.x = constrain(v.p.position.x, BORDER, width - BORDER);
+            v.p.position.y = constrain(v.p.position.y, BORDER, height - BORDER);
+            v.x = v.p.position.x;
+            v.y = v.p.position.y;
         }
     }
     else {
@@ -522,9 +514,11 @@ void draw() {
         for (int i = 0; i < vertexCount; ++i) {
             if (!near(vertices[i].x, vertices[i].newX)) {
                 vertices[i].x += ((vertices[i].newX - vertices[i].x) / frameRate);
+                animating = true;
             }
             if (!near(vertices[i].y, vertices[i].newY)) {
                 vertices[i].y += ((vertices[i].newY - vertices[i].y) / frameRate);
+                animating = true;
             }
         }
     }
@@ -572,6 +566,7 @@ void draw() {
             if (mouseIsOverLine(edges[k].vertexA.x, edges[k].vertexA.y, edges[k].vertexB.x, edges[k].vertexB.y)) {
                 if (edges[k].anim < 21.0) {
                     edges[k].anim = edges[k].anim + 5.0;
+                    animating = true;
                 }
                 else {
                     edges[k].anim = 21.0;
@@ -582,6 +577,7 @@ void draw() {
             else {
                 if (edges[k].anim > 1.0) {
                     edges[k].anim = edges[k].anim - 5.0;
+                    animating = true;
                 }
                 else {
                     edges[k].anim = 1.0;
@@ -611,40 +607,11 @@ void draw() {
         noStroke();
 
         // Cache diameter and radius of current circle
-        float radi = vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE;
-        float dragRadi = radi;
+        float radi = max(5, vertices[j].numberOfEdges * VERTEX_RADIUS_SCALE);
         float diam = radi * 2.0;
 
-        if (dragging) {
-            dragRadi = radi * 3;
-        }
-
-        // If the cursor is within radius of current circle...
-        if (dist(vertices[j].x, vertices[j].y, mouseX, mouseY) < dragRadi) {
-
-            // Change fill color to green.
+        if (j == draggedVertex || dist(vertices[j].x, vertices[j].y, mouseX, mouseY) < radi) {
             fill(COLOR_VERTEX_HIGHLIGHT);
-
-            // If user has mouse down and is moving...
-            boolean move = true;
-
-            if (dragging) {
-                for (int k = 0; k < vertexCount; k++) {
-                    if (j != k) {
-                        if (dist(mouseX, mouseY, vertices[k].x, vertices[k].y) < dragRadi) {
-                            move = false;
-                        }
-                    }
-                }
-
-                if (move) {
-                    // Move circle to circle position
-                    vertices[j].newX = mouseX;
-                    vertices[j].newY = mouseY;
-                    vertices[j].x = vertices[j].newX;
-                    vertices[j].y = vertices[j].newY;
-                }
-            }
         }
         else {
             colorMode(RGB);
@@ -666,6 +633,11 @@ void draw() {
             ellipse(vertices[j].x, vertices[j].y, diam, diam);
             text(vertices[j].item.name, vertices[j].x + 2, vertices[j].y - 5 - radi);
         }
+    }
+
+    // Retain the last frame until input or a layout change needs another one.
+    if (!animating) {
+        noLoop();
     }
 }
 
